@@ -72,7 +72,7 @@ def create_new_session(session_id : str):
 
 
 @app.post('/api/v1/delete_session/{session_id}')
-def create_new_session(session_id : str):
+def delete_session(session_id : str):
     """
     Deletes an existing session. Mainly done when there is no need of that session. 
     """
