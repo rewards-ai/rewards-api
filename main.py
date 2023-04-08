@@ -230,7 +230,7 @@ async def start_training(session_id : str):
     rewards_response = utils.get_all_files(session_id)
     streamer = RewardsStreamer(session_id = session_id, response = rewards_response)
     return StreamingResponse(
-        streamer.stream_episode(), 
+        streamer.stream_episode(yield_response=True), 
         media_type='text/event-stream'
     )
      
