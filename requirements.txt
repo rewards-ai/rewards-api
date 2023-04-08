@@ -1,0 +1,9 @@
+torch
+pandas 
+numpy 
+scikit-learn 
+fastapi==0.88.0
+rewards
+wandb 
+matplotlib 
+pygame 
