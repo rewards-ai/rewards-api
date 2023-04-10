@@ -38,6 +38,5 @@ TODO:
 
 - [ ] Logging functionality
 - [ ] Support for custom exceptions 
-- [ ] Stopping the game using endpoint (Multithreading)
-- [ ] Supporting streaming the game screen
-- [ ] Integration with the frontend 
+- [X] Supporting streaming the game screen
+- [X] Integration with the frontend 
