@@ -13,7 +13,12 @@ class GlobalConfig:
     REWARDS_PARENT_CONFIG_DIR: str = ".rewards_ai"
     REWARDS_CONFIG_MODEL_FOLDER_NAME: str = "session_saved_models"
     REWARDS_CONFIG_METRIC_FOLDER_NAME: str = "session_metrics"
-
+    
+    WEBSOCKET_HOST : str = "127.0.0.1"
+    WEBSOCKET_SECRET : str = "rewards-ai:v1.0.0:all-rights reserved"
+    
+    WEBSOCKET_VIDEO_STREAMING_PORT : int = 6520
+    WEBSOCKET_VIDEO_STREAMING_ENDPOINT : str = "stream_video"
 
 # Setup environment configuration
 

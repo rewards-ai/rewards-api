@@ -138,6 +138,24 @@ class AgentConfiguration(BaseModel):
         In the coming version, we will support more loss functions and also custom optimizer (if possible)
         """,
     )
+    
+    gamma : float = Field(
+        ..., 
+        example = 0.99, 
+        description="""
+        In reinforcement learning, gamma (γ) is a discount factor used to balance immediate and future rewards
+        Optimal values of gamma is ranges between 0.9 to 0.99 
+        """
+    )
+    
+    epsilon : float = Field(
+        ..., 
+        example = 0.99, 
+        description="""
+        In reinforcement learning, epsilon (ε) is an exploration-exploitation parameter used to 
+        determine the agent's probability of taking a random action versus the optimal action
+        """
+    )
 
     num_episodes: int = Field(
         ...,

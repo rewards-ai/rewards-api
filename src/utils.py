@@ -85,7 +85,8 @@ def add_inside_session(
         json.dump(configuration, json_file)
 
 
-def get_all_files(session_id: str, session_root_dir: Optional[str] = None) -> Dict[str, Any]:
+
+def get_session_files(session_id: str, session_root_dir: Optional[str] = None) -> Dict[str, Any]:
     """Get all the files inside a session configuration folder.
 
     Args:
@@ -93,7 +94,7 @@ def get_all_files(session_id: str, session_root_dir: Optional[str] = None) -> Di
         session_root_dir (Optional[str], optional): The directory where all the session config are been kept. Defaults to None.
 
     Returns:
-        Dict[str, Any]: All the configurations 
+        Dict[str, Any]: All the configurations for a particular session
     """
     session_root_dir = (
         os.path.join(get_home_path(), ".rewards_ai")
@@ -111,6 +112,34 @@ def get_all_files(session_id: str, session_root_dir: Optional[str] = None) -> Di
 
     # TODO: Show the metrics and model configurations so that it can be displayed in fronend
     return all_configs
+
+
+def get_all_sessions_info(session_root_dir : Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Get all the sessions information present for a particular user. 
+    
+    Args:
+        session_root_dir : Optional[str] -> The root directory where all the sessions are stored
+    
+    Returns:
+        Dict[str, Dict[str, Any]]: All the configurations for all the sessions
+    """
+    all_session_infos = {}
+    session_root_dir = (
+        os.path.join(get_home_path(), ".rewards_ai")
+        if session_root_dir is None
+        else session_root_dir
+    )
+    
+    session_id_paths = [
+        os.path.join(
+            session_root_dir, session_id
+        ) for session_id in os.listdir(session_root_dir)]
+    
+    for session_id, session_id_path in zip(os.listdir(session_root_dir), session_id_paths):
+        all_session_infos[session_id] = get_session_files(session_id=session_id, session_root_dir=session_root_dir)
+    
+    return all_session_infos
 
 def delete_session(session_id : str, session_root_dir : Optional[str] = None):
     """Deletes a particulart session 

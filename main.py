@@ -1,3 +1,5 @@
+import os 
+import json 
 import pygame 
 from fastapi.logger import logger 
 from fastapi import FastAPI, Request
@@ -129,8 +131,9 @@ def push_agent_parameters(request : Request, body : AgentConfiguration):
         learning_rate = body.learning_rate, 
         loss_fn = body.loss_fn, 
         optimizer = body.optimizer, 
+        gamma = body.gamma, 
+        epsilon = body.epsilon,
         num_episodes = body.num_episodes
-        
     )
     
     return {
@@ -207,9 +210,24 @@ async def get_all_parameters(session_id : str):
     
     - `session_id (str)`: The session ID which was used in the start. 
     """
-    file_response = utils.get_all_files(session_id)
+    file_response = utils.get_session_files(session_id)
     file_response['status'] = 200 
     return file_response
+
+@app.get('/api/v1/get_all_sessions')
+def get_all_sessions():
+    """
+    Fetches all the session infors and parameters
+    
+    TODO
+    - Add a proper Response model for this endpoint and other endpoints 
+      in the coming versions. 
+    """
+    return utils.get_all_sessions_info()
+
+# make streamer as the generator 
+# make this endpoint as the client 
+# so it will be back and forth connections between the client and the server 
 
 
 
@@ -226,13 +244,10 @@ async def start_training(session_id : str):
         session_id (str): The session. 
         Using this session id we can train any of the experiment 
     """
-    
-    rewards_response = utils.get_all_files(session_id)
+    rewards_response = utils.get_session_files(session_id)
     streamer = RewardsStreamer(session_id = session_id, response = rewards_response)
-    return StreamingResponse(
-        streamer.stream_episode(yield_response=True), 
-        media_type='text/event-stream'
-    )
+    return StreamingResponse(streamer.stream_episode())
+    
      
 
 @app.get('/api/v1/stop_training/')
