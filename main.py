@@ -296,4 +296,8 @@ def push_model(model_name : str):
         'status' : 200, 
         'response' : 'ok'
     }   
-
+    
+@app.post("/api/v1/get_all_envs")
+def get_all_envs():
+    # Returns data of all the environments
+    return utils.get_all_envs()

@@ -166,3 +166,31 @@ def delete_session(session_id : str, session_root_dir : Optional[str] = None):
             'status' : 500, 
             'message': f'Internal server error {e}'
         }
+        
+def get_all_envs() -> Dict[str, Dict[str, Any]]:
+    # TODO:
+    #   - Data is static, has to come from SDK
+    data = [
+        {
+            "name": "Car Racer",
+            "description": "2D racing environment, where a car tries to complete a given track using it's 5 radars.",
+            "isReleased": True
+        },
+        {
+            "name": "Snake Game",
+            "Description": "2D snake environment, where mutiple snakes controlled by multiple models try to get food as fast as possible",
+            "isReleased": False
+        },
+        {
+            "name": "Street Fighter",
+            "Description": "2D fighting arena where 2 fighters are trained to fight and get maximum socre.",
+            "isReleased": False
+        },
+        {
+            "name": "Bi-Pedal",
+            "Description": "2D rough road, where a bi-pedal humanoid learns to walk as fast as possible",
+            "isReleased": False
+        }
+    ]
+    
+    return data
