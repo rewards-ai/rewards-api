@@ -42,7 +42,12 @@ app = FastAPI(
     """
 )
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
+app.add_middleware(CORSMiddleware,
+                    allow_origins=["*"],
+                    allow_credentials=True,
+                    allow_methods=["*"],
+                    allow_headers=["*"],
+                )
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, python_exception_handler)
 
@@ -95,6 +100,7 @@ def push_env_parameters(request : Request, body : EnvironmentConfigurations):
     - `request (Request)`: Incoming request headers 
     - `body (EnvironmentConfigurations)`: Request body
     """
+    print(body)
     utils.add_inside_session(
         session_id = body.session_id, config_name="env_params", 
         environment_name = body.environment_name,
@@ -301,3 +307,7 @@ def push_model(model_name : str):
 def get_all_envs():
     # Returns data of all the environments
     return utils.get_all_envs()
+
+@app.post("/api/v1/get_all_tracks")
+def get_all_tracks():
+    return utils.get_all_tracks("car-racer")

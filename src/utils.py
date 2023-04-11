@@ -68,6 +68,7 @@ def add_inside_session(
         multi_config (bool) : True if it has a multiple json configuration, then
         the configuration will be in the form of: [{}, {}, .. ]
     """
+    print("here")
     session_root_dir = os.path.join(get_home_path(), ".rewards_ai")
 
     configuration = [dict(kwargs)] if multi_config else dict(kwargs)
@@ -173,24 +174,39 @@ def get_all_envs() -> Dict[str, Dict[str, Any]]:
     data = [
         {
             "name": "Car Racer",
+            "id": "car_racer", 
             "description": "2D racing environment, where a car tries to complete a given track using it's 5 radars.",
             "isReleased": True
         },
         {
             "name": "Snake Game",
-            "Description": "2D snake environment, where mutiple snakes controlled by multiple models try to get food as fast as possible",
+            "id": "snake_game", 
+            "description": "2D snake environment, where mutiple snakes controlled by multiple models try to get food as fast as possible",
             "isReleased": False
         },
         {
             "name": "Street Fighter",
-            "Description": "2D fighting arena where 2 fighters are trained to fight and get maximum socre.",
+            "id": "street_fighter", 
+            "description": "2D fighting arena where 2 fighters are trained to fight and get maximum socre.",
             "isReleased": False
         },
         {
             "name": "Bi-Pedal",
-            "Description": "2D rough road, where a bi-pedal humanoid learns to walk as fast as possible",
+            "id": "bi-pedal", 
+            "description": "2D rough road, where a bi-pedal humanoid learns to walk as fast as possible",
             "isReleased": False
         }
     ]
+    
+    return data
+
+def get_all_tracks(environment_name) -> Dict[str, Dict[str, Any]]:
+    # TODO:
+    #   - Data is static, has to come from SDK
+    
+    data = []
+    
+    if environment_name == "car-racer":
+        data = ["track-1.png", 'track-2.png', 'track-3.png']
     
     return data
