@@ -68,7 +68,6 @@ def add_inside_session(
         multi_config (bool) : True if it has a multiple json configuration, then
         the configuration will be in the form of: [{}, {}, .. ]
     """
-    print("here")
     session_root_dir = os.path.join(get_home_path(), ".rewards_ai")
 
     configuration = [dict(kwargs)] if multi_config else dict(kwargs)
