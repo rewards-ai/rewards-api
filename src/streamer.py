@@ -41,7 +41,7 @@ class RewardsStreamer:
         self.gamma = response["agent_params"]["gamma"]
         self.epsilon = response["agent_params"]['epsilon']
         self.num_episodes = response["agent_params"]["num_episodes"]
-        self.checkpoint_path = os.path.join(
+        self.checkpoint_folder_path = os.path.join(
             utils.get_home_path(),
             CONFIG["REWARDS_PARENT_CONFIG_DIR"], 
             f"{session_id}/{CONFIG['REWARDS_CONFIG_MODEL_FOLDER_NAME']}/"
@@ -62,7 +62,7 @@ class RewardsStreamer:
             model = self.model, 
             loss = self.loss, 
             optimizer = self.optimizer, 
-            checkpoint_path = self.checkpoint_path, 
+            checkpoint_folder_path = self.checkpoint_folder_path, 
             model_name = "model.pth"
         )
         
