@@ -21,9 +21,8 @@ from src.exceptions import (
     python_exception_handler
 )
 
-import src.utils as utils 
+import src.utils as utils
 from src.streamer import RewardsStreamer
-
 
 # TODO: 
 # -----
@@ -238,7 +237,7 @@ def get_all_sessions():
 
 
 @app.get('/api/v1/start_training/{session_id}')
-async def start_training(session_id : str):
+def start_training(session_id : str):
     """/start_training is the endpoint to start training the agent
     These are the sets of events that will happen during this session while triggering this endpoint
     

@@ -93,43 +93,39 @@ class RewardsStreamer:
         new_func = globals_dict[function_name]
         return new_func
     
-    def stream_episode(self, yield_response: bool = False):
-        for episode in range(1, self.num_episodes + 1):
-            self.game.initialize() 
-            self.game.FPS = self.car_speed
-            total_score, record = 0, 0 
-            done = False 
+    def stream_episode(self, yield_response: bool = False):        
+        self.game.FPS = self.car_speed
+        total_score, record = 0, 0 
+        done = False
+        while True:
+            if self.num_episodes == self.agent.n_games:
+                return {
+                    "data": "False"
+                }
+                
+            _, done, score, pixel_data = self.agent.train_step(self.game)
+            self.game.timeTicking()
             
-            
-            while not done:
-                _, done, score, pixel_data = self.agent.train_step(self.game)
-                self.game.timeTicking()
-            
-            self.agent.n_games += 1 
-            self.agent.train_long_memory() 
-            
-            if score > record:
-                self.agent.model.save(
-                    self.checkpoint_folder_path, 
-                    'model.pth', 
-                    device = self.device
+            if done:
+                self.game.initialize() 
+                self.agent.n_games += 1 
+                self.agent.train_long_memory() 
+                
+                if score > record:
+                    self.agent.model.save(
+                        self.checkpoint_folder_path, 
+                        'model.pth', 
+                        device = self.device
                     )
-            total_score += score 
+                total_score += score 
+                
+                utils.add_inside_session(
+                    self.session_id, 
+                    config_name="metrics", 
+                    rewrite=True, multi_config=True, 
+                    episode_number = self.agent.n_games, 
+                    episode_score = score, 
+                    mean_score = total_score / self.agent.n_games
+                )
             
-            # stream all the metrics to a file 
-            utils.add_inside_session(
-                self.session_id, 
-                config_name="metrics", 
-                rewrite=True, multi_config=True, 
-                episode_number = episode, 
-                episode_score = score, 
-                mean_score = total_score / self.agent.n_games
-            )
-                        
-            response = {
-                'episode_number' : episode, 
-                'episode_score' : score,
-                'episode_mean_score' : total_score / self.agent.n_games
-            }
-            
-            yield json.dumps(response) + "\n"  
+            yield "sdafasfsdafsadfasdfdsfsdfdsf"
