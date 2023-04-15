@@ -42,7 +42,11 @@ app = FastAPI(
     """
 )
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"],
+    allow_credentials=True, allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, python_exception_handler)
 
@@ -95,6 +99,7 @@ def push_env_parameters(request : Request, body : EnvironmentConfigurations):
     - `request (Request)`: Incoming request headers 
     - `body (EnvironmentConfigurations)`: Request body
     """
+    print(body)
     utils.add_inside_session(
         session_id = body.session_id, config_name="env_params", 
         environment_name = body.environment_name,
@@ -138,7 +143,8 @@ def push_agent_parameters(request : Request, body : AgentConfiguration):
     
     return {
         'status' : 200, 
-        'response' : 'Agent configurations saved sucessfully'
+        'response' : 'Agent configurations saved sucessfully',
+        'test': body.model_configuration
     } 
 
 @app.post("/api/v1/write_training_params")
@@ -173,7 +179,7 @@ def push_training_parameters(request : Request, body : TrainingConfigurations):
     utils.add_inside_session(
         session_id=body.session_id, config_name = "training_params",
         learning_algorithm = body.learning_algorithm, 
-        enable_wandb = body.enable_wandb, 
+        enable_wandb = body.enable_wandb == 1, 
         reward_function = body.reward_function
     )
     
@@ -296,4 +302,12 @@ def push_model(model_name : str):
         'status' : 200, 
         'response' : 'ok'
     }   
+    
+@app.post("/api/v1/get_all_envs")
+def get_all_envs():
+    # Returns data of all the environments
+    return utils.get_all_envs()
 
+@app.post("/api/v1/get_all_tracks")
+def get_all_tracks():
+    return utils.get_all_tracks("car-racer")
