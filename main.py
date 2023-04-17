@@ -3,9 +3,9 @@ import json
 import pygame 
 from fastapi.logger import logger 
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from dotenv import set_key, load_dotenv
 
 # configs and import from other modules
 
@@ -229,45 +229,6 @@ def get_all_sessions():
       in the coming versions. 
     """
     return utils.get_all_sessions_info()
-
-# make streamer as the generator 
-# make this endpoint as the client 
-# so it will be back and forth connections between the client and the server 
-
-
-
-@app.get('/api/v1/start_training/{session_id}')
-def start_training(session_id : str):
-    """/start_training is the endpoint to start training the agent
-    These are the sets of events that will happen during this session while triggering this endpoint
-    
-    - Validation of all the parameters (TODO)
-    - Loading the model and the agent 
-    - Start loading the game and streaming the results 
-
-    Args:
-        session_id (str): The session. 
-        Using this session id we can train any of the experiment 
-    """
-    rewards_response = utils.get_session_files(session_id)
-    streamer = RewardsStreamer(session_id = session_id, response = rewards_response)
-    return StreamingResponse(streamer.stream_episode())
-    
-     
-
-@app.get('/api/v1/stop_training/')
-def stop_training():
-    # NOTE: (TODO)
-    # Stop training does not work for now. 
-    # One main reason is to make it into a different threading. This might introduce
-    # more bugs and problems. One can stop training by just clicking the cross button. 
-    # Howevar it will automatically close once episode gets finished
-    
-    pygame.quit() 
-    return {
-        "status" : 200, 
-        "message" : "Stopped training successfully"
-    }
 
 
 @app.post("/api/v1/validate_exp")
