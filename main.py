@@ -24,7 +24,7 @@ def startup_event():
     
 @app.post('/api/v1/create_session')
 def create_new_session():
-    '''
+    """
     Create a new session in the rewards-platform where user can now initialize with different environment, agent configuration.
 
     ---
@@ -33,8 +33,8 @@ def create_new_session():
         in: query
         type: string
         required: true
-        description: The session ID is a unique string with a format of <DATE><USERID><TIME>. In each of the session, a unique type of model can be made (which will remain unchanged). However, during a session, some parameters including environment, agent, and some training can be changed.
-    '''
+        description: The session ID is a unique string. In each of the session, a unique type of model can be made (which will remain unchanged). However, during a session, some parameters including environment, agent, and some training can be changed.
+    """
     session_id = request.args.get("session_id")
     utils.create_session(session_name=session_id)
     return {
