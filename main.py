@@ -1,37 +1,20 @@
 from rewards import QTrainer, LinearQNet, CarGame
 from werkzeug.exceptions import HTTPException
-from flask import Flask, Response, request
-from flask import Flask, jsonify, Request
+from flask import Flask, Response, request, Request
 from werkzeug.exceptions import NotFound
 import matplotlib.pyplot as plt
 from src.config import CONFIG
 from flask_cors import CORS
 import src.utils as utils
+from flasgger import Swagger
 import numpy as np
+import json
 import cv2
 import os
 
-from src.schemas import (
-    AgentConfiguration, 
-    TrainingConfigurations,
-    EnvironmentConfigurations, 
-    RewardFunction
-)
-import src.utils as utils
-
 app = Flask(__name__)
 CORS(app)
-
-@app.errorhandler(HTTPException)
-def handle_exception(e):
-    response = e.get_response()
-    response.data = jsonify({
-        "code": e.code,
-        "name": e.name,
-        "description": e.description
-    })
-    response.content_type = "application/json"
-    return response
+Swagger(app)
 
 @app.before_first_request
 def startup_event():
@@ -39,19 +22,20 @@ def startup_event():
     app.logger.info("Folder Created")
     app.logger.info("Starting up")
     
-@app.post('/api/v1/create_session/{session_id}')
-def create_new_session(session_id : str):
-    """
-    This create a new session in the rewards-platform where 
-    user can now initialize with different environment, agent configuration. 
+@app.post('/api/v1/create_session')
+def create_new_session():
+    '''
+    Create a new session in the rewards-platform where user can now initialize with different environment, agent configuration.
 
-    Args:
-    
-    - `session_id (str)`:The session ID is a unique string with a format of <DATE>_<USERID>_<TIME>. 
-    In each of the session, a unique type of model can be made (which will be remain unchanged)
-    Howevar during a session some parameters including environment, agent and some training 
-    can be changed.
-    """
+    ---
+    parameters:
+    - name: session_id
+        in: query
+        type: string
+        required: true
+        description: The session ID is a unique string with a format of <DATE><USERID><TIME>. In each of the session, a unique type of model can be made (which will remain unchanged). However, during a session, some parameters including environment, agent, and some training can be changed.
+    '''
+    session_id = request.args.get("session_id")
     utils.create_session(session_name=session_id)
     return {
         'status' : 200, 
@@ -59,35 +43,38 @@ def create_new_session(session_id : str):
     } 
 
 
-@app.post('/api/v1/delete_session/{session_id}')
-def delete_session(session_id : str):
+@app.post('/api/v1/delete_session')
+def delete_session():
     """
     Deletes an existing session. Mainly done when there is no need of that session. 
     """
+    session_id = request.args.get("session_id")
     return utils.delete_session(session_id = session_id)
 
 @app.post('/api/v1/write_env_params')
-def push_env_parameters(request : Request, body : EnvironmentConfigurations):
+def push_env_parameters():
     """
     Create and save environment parameters for the given environment. 
-    List of environment parameters:
+    List of environment ---
+    parameters:
     - environment_name : The name of the environment defaults to 'car-race'
     - environment_world : The environment map to choose options : 0/1/2
     - mode : training/validation mode 
     - car_speed : the speed of the car (agent)
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
+    - request (Request): Incoming request headers 
     - `body (EnvironmentConfigurations)`: Request body
     """
-    print(body)
+    body = request.json
     utils.add_inside_session(
-        session_id = body.session_id, config_name="env_params", 
-        environment_name = body.environment_name,
-        environment_world = body.environment_world,
-        mode = body.mode, 
-        car_speed = body.car_speed 
+        session_id = body["session_id"], config_name="env_params", 
+        environment_name = body["environment_name"],
+        environment_world = body["environment_world"],
+        mode = body["mode"], 
+        car_speed = body["car_speed"] 
     )
     
     return {
@@ -97,43 +84,47 @@ def push_env_parameters(request : Request, body : EnvironmentConfigurations):
 
 
 @app.post("/api/v1/write_agent_params")
-def push_agent_parameters(request : Request, body : AgentConfiguration):
+def push_agent_parameters():
     """
     Create and save agent parameters for the given session
-    List of the agent parameters:
+    List of the agent ---
+    parameters:
     - model_configuration : example: '[[5, 128], [128, 64], [64, 3]]' 
     - learning_rate : example : 0.01 
     - loss_fn : example : mse 
     - optimizer : example : adam 
     - num_episodes : The number of episodes to train the agent. example : 100
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name="agent_params",
-        model_configuration = body.model_configuration, 
-        learning_rate = body.learning_rate, 
-        loss_fn = body.loss_fn, 
-        optimizer = body.optimizer, 
-        gamma = body.gamma, 
-        epsilon = body.epsilon,
-        num_episodes = body.num_episodes
+        session_id=body["session_id"], config_name="agent_params",
+        model_configuration = body["model_configuration"], 
+        learning_rate = body["learning_rate"], 
+        loss_fn = body["loss_fn"], 
+        optimizer = body["optimizer"], 
+        gamma = body["gamma"], 
+        epsilon = body["epsilon"],
+        num_episodes = body["num_episodes"]
     )
     
     return {
         'status' : 200, 
         'response' : 'Agent configurations saved sucessfully',
-        'test': body.model_configuration
+        'test': body["model_configuration"]
     } 
 
 @app.post("/api/v1/write_training_params")
-def push_training_parameters(request : Request, body : TrainingConfigurations):
+def push_training_parameters():
     """
     Create and save training parameters for the given session
-    List of the training parameters:
+    List of the training ---
+    parameters:
     - learning_algorithm : example : 0.01 
     - enable_wandb : example : mse 
     - reward_function : example : Callable a reward function looks like this: 
@@ -153,16 +144,18 @@ def push_training_parameters(request : Request, body : TrainingConfigurations):
         return reward
     ``` 
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name = "training_params",
-        learning_algorithm = body.learning_algorithm, 
-        enable_wandb = body.enable_wandb == 1, 
-        reward_function = body.reward_function
+        session_id=body["session_id"], config_name = "training_params",
+        learning_algorithm = body["learning_algorithm"], 
+        enable_wandb = body["enable_wandb"] == 1, 
+        reward_function = body["reward_function"]
     )
     
     return {
@@ -172,32 +165,36 @@ def push_training_parameters(request : Request, body : TrainingConfigurations):
 
 
 @app.post("/api/v1/write_reward_fn")
-def write_reward_function(request : Request, body : RewardFunction):
+def write_reward_function():
     """
     Rewriting the reward function during the time of experimentation
     
-    Args:
+    ---
+    parameters:
         
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name="training_params", 
+        session_id=body["session_id"], config_name="training_params", 
         rewrite=True, 
-        reward_function = body.reward_function
+        reward_function = body["reward_function"]
     )
 
 
-@app.get('/api/v1/get_all_params/{session_id}')
-async def get_all_parameters(session_id : str):
+@app.get('/api/v1/get_all_params')
+async def get_all_parameters():
     """
     Listing all the parameters (environment, agent and training) parameters 
     as one single json response. 
     
-    Args:
+    ---
+    parameters:
     
-    - `session_id (str)`: The session ID which was used in the start. 
+    - session_id (str): The session ID which was used in the start. 
     """
+    session_id = request.args.get("session_id")
     file_response = utils.get_session_files(session_id)
     file_response['status'] = 200 
     return file_response
@@ -232,7 +229,7 @@ def validate_latest_expriment():
 
 
 @app.post("/api/v1/push_model")
-def push_model(model_name : str):
+def push_model():
     # In the frontend we will show the list of available model agents and their infos like 
     # How much they were trained 
     # their total reward 
@@ -362,13 +359,13 @@ def generate(session_id):
         img = cv2.imencode(".png", img)[1]
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(img) + b'\r\n')
 
-@app.route('/stream', methods = ['GET'])
+@app.route('/api/v1/stream', methods = ['GET'])
 def stream():
-    session_id = request.args.get('id')
+    session_id = request.args.get('session_id')
     print(session_id)
     return Response(generate(session_id), mimetype = "multipart/x-mixed-replace; boundary=frame")
 
-@app.route('/stop')
+@app.route('/api/v1/stop')
 def stop():
     global stop_streaming
     stop_streaming = True
@@ -376,7 +373,7 @@ def stop():
     
 if __name__ == '__main__':
    host = "127.0.0.1"
-   port = 8005
+   port = 8000
    debug = True
    options = None
    app.run(host, port, debug, options)
