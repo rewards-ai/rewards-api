@@ -91,3 +91,6 @@ target/
 rewards-api/src/__pycache__
 rewards-api/__pycache__
 tmp.py
+flaskApp.py
+old_code
+saved_models

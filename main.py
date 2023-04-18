@@ -1,60 +1,43 @@
-import os 
-import json 
-import pygame 
-from fastapi.logger import logger 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from dotenv import set_key, load_dotenv
+from rewards import QTrainer, LinearQNet, CarGame
+from werkzeug.exceptions import HTTPException
+from flask import Flask, Response, request
+from flask import Flask, jsonify, Request
+from werkzeug.exceptions import NotFound
+import matplotlib.pyplot as plt
+from src.config import CONFIG
+from flask_cors import CORS
+import src.utils as utils
+import numpy as np
+import cv2
+import os
 
-# configs and import from other modules
-
-from src.config import CONFIG 
 from src.schemas import (
     AgentConfiguration, 
     TrainingConfigurations,
     EnvironmentConfigurations, 
     RewardFunction
 )
-from src.exceptions import (
-    validation_exception_handler, 
-    python_exception_handler
-)
-
 import src.utils as utils
-from src.streamer import RewardsStreamer
 
-# TODO: 
-# -----
-# Add a response model for returning all the configuration in structured format 
-# Also add a error response model 
+app = Flask(__name__)
+CORS(app)
 
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    response = e.get_response()
+    response.data = jsonify({
+        "code": e.code,
+        "name": e.name,
+        "description": e.description
+    })
+    response.content_type = "application/json"
+    return response
 
-app = FastAPI(
-    title="RewardsAI API for interacting with rewards-platform", 
-    version="1.0.0", 
-    description="""
-    rewards-api is the easy to use API for interacting with agents and environments.
-    It enables users to easily create experiments and manage each of the experiments
-    by changing different types of parameters and reward function and also pushing the 
-    model to other location while competing. 
-    """
-)
-
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"],
-    allow_credentials=True, allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, python_exception_handler)
-
-@app.on_event('startup')
-async def startup_event():
+@app.before_first_request
+def startup_event():
     utils.create_folder_struct()
-    logger.info("Folder Created")
-    logger.info("Starting up")
-    
+    app.logger.info("Folder Created")
+    app.logger.info("Starting up")
     
 @app.post('/api/v1/create_session/{session_id}')
 def create_new_session(session_id : str):
@@ -271,3 +254,129 @@ def get_all_envs():
 @app.post("/api/v1/get_all_tracks")
 def get_all_tracks():
     return utils.get_all_tracks("car-racer")
+
+def enableStreaming():
+    global stop_streaming
+    stop_streaming = False
+    
+def convert_str_func_to_exec(str_function: str, function_name: str):
+    globals_dict = {}
+    exec(str_function, globals_dict)
+    new_func = globals_dict[function_name]
+    return new_func
+
+def generate(session_id):
+    r = utils.get_session_files(session_id)
+    print(session_id)
+    print("check" ,session_id)
+    record = 0
+    done = False
+    enableStreaming()
+    
+    # environment parameters 
+    env_name = r["env_params"]["environment_name"]
+    env_world = int(r["env_params"]["environment_world"])
+    mode = r["env_params"]["mode"]
+    car_speed = r["env_params"]["car_speed"]
+    
+    # agent parameters
+    layer_config = eval(r["agent_params"]["model_configuration"])
+    if type(layer_config) == str:
+        layer_config = eval(layer_config)
+
+    lr = r["agent_params"]["learning_rate"]
+    loss = r["agent_params"]["loss_fn"]
+    optimizer = r["agent_params"]["optimizer"]
+    gamma = r["agent_params"]["gamma"]
+    epsilon = r["agent_params"]['epsilon']
+    num_episodes = r["agent_params"]["num_episodes"]
+    
+    reward_function = r["training_params"]["reward_function"]
+    
+    global lock
+        
+    checkpoint_folder_path = os.path.join(
+        utils.get_home_path(),
+        CONFIG["REWARDS_PARENT_CONFIG_DIR"], 
+        f"{session_id}/{CONFIG['REWARDS_CONFIG_MODEL_FOLDER_NAME']}/"
+    )
+    
+    model = LinearQNet(layer_config)
+
+    agent = QTrainer(
+        lr = lr, 
+        gamma = gamma, 
+        epsilon = epsilon, 
+        model = model, 
+        loss = loss, 
+        optimizer = optimizer, 
+        checkpoint_folder_path = checkpoint_folder_path, 
+        model_name = "model.pth"
+    )
+    
+    game = CarGame(
+        track_num=env_world, 
+        mode = mode, 
+        reward_function=convert_str_func_to_exec(
+            reward_function, 
+            function_name="reward_function"
+        ), 
+        display_type="surface", 
+        screen_size=(800, 700)
+    )        
+    game.FPS = car_speed
+    
+    record = 0
+    plot_scores = []
+    plot_mean_scores = []
+    total_score = 0
+    done = False
+    
+    while True:
+        global stop_streaming
+        if stop_streaming or agent.n_games == num_episodes:
+            return {"status": 204}
+        reward, done, score, pix = agent.train_step(game)
+        game.timeTicking()
+
+        if done:
+            game.initialize()
+            agent.n_games += 1
+            agent.train_long_memory()
+            if score > record:
+                record = score
+                agent.model.save(
+                    checkpoint_folder_path, 
+                    'model.pth', 
+                    device = "cpu"
+                )
+            print('Game', agent.n_games, 'Score', score, 'Record:', record)
+            plot_scores.append(score)
+            total_score += score
+            mean_score = total_score / agent.n_games
+            plot_mean_scores.append(mean_score)
+            utils.update_graphing_file(session_id, {"plot_scores": plot_scores, "plot_mean_scores": plot_mean_scores})
+        img = np.fliplr(pix)
+        img = np.rot90(img)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.imencode(".png", img)[1]
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(img) + b'\r\n')
+
+@app.route('/stream', methods = ['GET'])
+def stream():
+    session_id = request.args.get('id')
+    print(session_id)
+    return Response(generate(session_id), mimetype = "multipart/x-mixed-replace; boundary=frame")
+
+@app.route('/stop')
+def stop():
+    global stop_streaming
+    stop_streaming = True
+    return {"status": 204}
+    
+if __name__ == '__main__':
+   host = "127.0.0.1"
+   port = 8005
+   debug = True
+   options = None
+   app.run(host, port, debug, options)
