@@ -19,5 +19,4 @@ RUN mkdir rewards-api
 COPY ./rewards-api rewards-api
 WORKDIR "/rewards-api"
 EXPOSE 8900 
-ENTRYPOINT [ "uvicorn", "main:app"]
-CMD [ "--reload" ]
+CMD ["python", "main.py"]

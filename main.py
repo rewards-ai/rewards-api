@@ -1,75 +1,41 @@
-import os 
-import json 
-import pygame 
-from fastapi.logger import logger 
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
+from rewards import QTrainer, LinearQNet, CarGame
+from werkzeug.exceptions import HTTPException
+from flask import Flask, Response, request, Request
+from werkzeug.exceptions import NotFound
+import matplotlib.pyplot as plt
+from src.config import CONFIG
+from flask_cors import CORS
+import src.utils as utils
+from flasgger import Swagger
+import numpy as np
+import json
+import cv2
+import os
 
-# configs and import from other modules
+app = Flask(__name__)
+CORS(app)
+Swagger(app)
 
-from src.config import CONFIG 
-from src.schemas import (
-    AgentConfiguration, 
-    TrainingConfigurations,
-    EnvironmentConfigurations, 
-    RewardFunction
-)
-from src.exceptions import (
-    validation_exception_handler, 
-    python_exception_handler
-)
-
-import src.utils as utils 
-from src.streamer import RewardsStreamer
-
-
-# TODO: 
-# -----
-# Add a response model for returning all the configuration in structured format 
-# Also add a error response model 
-
-
-app = FastAPI(
-    title="RewardsAI API for interacting with rewards-platform", 
-    version="1.0.0", 
-    description="""
-    rewards-api is the easy to use API for interacting with agents and environments.
-    It enables users to easily create experiments and manage each of the experiments
-    by changing different types of parameters and reward function and also pushing the 
-    model to other location while competing. 
-    """
-)
-
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"],
-    allow_credentials=True, allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, python_exception_handler)
-
-@app.on_event('startup')
-async def startup_event():
+@app.before_first_request
+def startup_event():
     utils.create_folder_struct()
-    logger.info("Folder Created")
-    logger.info("Starting up")
+    app.logger.info("Folder Created")
+    app.logger.info("Starting up")
     
-    
-@app.post('/api/v1/create_session/{session_id}')
-def create_new_session(session_id : str):
+@app.post('/api/v1/create_session')
+def create_new_session():
     """
-    This create a new session in the rewards-platform where 
-    user can now initialize with different environment, agent configuration. 
+    Create a new session in the rewards-platform where user can now initialize with different environment, agent configuration.
 
-    Args:
-    
-    - `session_id (str)`:The session ID is a unique string with a format of <DATE>_<USERID>_<TIME>. 
-    In each of the session, a unique type of model can be made (which will be remain unchanged)
-    Howevar during a session some parameters including environment, agent and some training 
-    can be changed.
+    ---
+    parameters:
+    - name: session_id
+        in: query
+        type: string
+        required: true
+        description: The session ID is a unique string. In each of the session, a unique type of model can be made (which will remain unchanged). However, during a session, some parameters including environment, agent, and some training can be changed.
     """
+    session_id = request.args.get("session_id")
     utils.create_session(session_name=session_id)
     return {
         'status' : 200, 
@@ -77,35 +43,38 @@ def create_new_session(session_id : str):
     } 
 
 
-@app.post('/api/v1/delete_session/{session_id}')
-def delete_session(session_id : str):
+@app.post('/api/v1/delete_session')
+def delete_session():
     """
     Deletes an existing session. Mainly done when there is no need of that session. 
     """
+    session_id = request.args.get("session_id")
     return utils.delete_session(session_id = session_id)
 
 @app.post('/api/v1/write_env_params')
-def push_env_parameters(request : Request, body : EnvironmentConfigurations):
+def push_env_parameters():
     """
     Create and save environment parameters for the given environment. 
-    List of environment parameters:
+    List of environment ---
+    parameters:
     - environment_name : The name of the environment defaults to 'car-race'
     - environment_world : The environment map to choose options : 0/1/2
     - mode : training/validation mode 
     - car_speed : the speed of the car (agent)
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
+    - request (Request): Incoming request headers 
     - `body (EnvironmentConfigurations)`: Request body
     """
-    print(body)
+    body = request.json
     utils.add_inside_session(
-        session_id = body.session_id, config_name="env_params", 
-        environment_name = body.environment_name,
-        environment_world = body.environment_world,
-        mode = body.mode, 
-        car_speed = body.car_speed 
+        session_id = body["session_id"], config_name="env_params", 
+        environment_name = body["environment_name"],
+        environment_world = body["environment_world"],
+        mode = body["mode"], 
+        car_speed = body["car_speed"] 
     )
     
     return {
@@ -115,43 +84,47 @@ def push_env_parameters(request : Request, body : EnvironmentConfigurations):
 
 
 @app.post("/api/v1/write_agent_params")
-def push_agent_parameters(request : Request, body : AgentConfiguration):
+def push_agent_parameters():
     """
     Create and save agent parameters for the given session
-    List of the agent parameters:
+    List of the agent ---
+    parameters:
     - model_configuration : example: '[[5, 128], [128, 64], [64, 3]]' 
     - learning_rate : example : 0.01 
     - loss_fn : example : mse 
     - optimizer : example : adam 
     - num_episodes : The number of episodes to train the agent. example : 100
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name="agent_params",
-        model_configuration = body.model_configuration, 
-        learning_rate = body.learning_rate, 
-        loss_fn = body.loss_fn, 
-        optimizer = body.optimizer, 
-        gamma = body.gamma, 
-        epsilon = body.epsilon,
-        num_episodes = body.num_episodes
+        session_id=body["session_id"], config_name="agent_params",
+        model_configuration = body["model_configuration"], 
+        learning_rate = body["learning_rate"], 
+        loss_fn = body["loss_fn"], 
+        optimizer = body["optimizer"], 
+        gamma = body["gamma"], 
+        epsilon = body["epsilon"],
+        num_episodes = body["num_episodes"]
     )
     
     return {
         'status' : 200, 
         'response' : 'Agent configurations saved sucessfully',
-        'test': body.model_configuration
+        'test': body["model_configuration"]
     } 
 
 @app.post("/api/v1/write_training_params")
-def push_training_parameters(request : Request, body : TrainingConfigurations):
+def push_training_parameters():
     """
     Create and save training parameters for the given session
-    List of the training parameters:
+    List of the training ---
+    parameters:
     - learning_algorithm : example : 0.01 
     - enable_wandb : example : mse 
     - reward_function : example : Callable a reward function looks like this: 
@@ -171,16 +144,18 @@ def push_training_parameters(request : Request, body : TrainingConfigurations):
         return reward
     ``` 
     
-    Args:
+    ---
+    parameters:
     
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name = "training_params",
-        learning_algorithm = body.learning_algorithm, 
-        enable_wandb = body.enable_wandb == 1, 
-        reward_function = body.reward_function
+        session_id=body["session_id"], config_name = "training_params",
+        learning_algorithm = body["learning_algorithm"], 
+        enable_wandb = body["enable_wandb"] == 1, 
+        reward_function = body["reward_function"]
     )
     
     return {
@@ -190,32 +165,36 @@ def push_training_parameters(request : Request, body : TrainingConfigurations):
 
 
 @app.post("/api/v1/write_reward_fn")
-def write_reward_function(request : Request, body : RewardFunction):
+def write_reward_function():
     """
     Rewriting the reward function during the time of experimentation
     
-    Args:
+    ---
+    parameters:
         
-    - `request (Request)`: Incoming request headers 
-    - `body (EnvironmentConfigurations)`: Request body
+    - request (Request): Incoming request headers 
+    - body (EnvironmentConfigurations): Request body
     """
+    body = request.json
     utils.add_inside_session(
-        session_id=body.session_id, config_name="training_params", 
+        session_id=body["session_id"], config_name="training_params", 
         rewrite=True, 
-        reward_function = body.reward_function
+        reward_function = body["reward_function"]
     )
 
 
-@app.get('/api/v1/get_all_params/{session_id}')
-async def get_all_parameters(session_id : str):
+@app.get('/api/v1/get_all_params')
+async def get_all_parameters():
     """
     Listing all the parameters (environment, agent and training) parameters 
     as one single json response. 
     
-    Args:
+    ---
+    parameters:
     
-    - `session_id (str)`: The session ID which was used in the start. 
+    - session_id (str): The session ID which was used in the start. 
     """
+    session_id = request.args.get("session_id")
     file_response = utils.get_session_files(session_id)
     file_response['status'] = 200 
     return file_response
@@ -230,45 +209,6 @@ def get_all_sessions():
       in the coming versions. 
     """
     return utils.get_all_sessions_info()
-
-# make streamer as the generator 
-# make this endpoint as the client 
-# so it will be back and forth connections between the client and the server 
-
-
-
-@app.get('/api/v1/start_training/{session_id}')
-async def start_training(session_id : str):
-    """/start_training is the endpoint to start training the agent
-    These are the sets of events that will happen during this session while triggering this endpoint
-    
-    - Validation of all the parameters (TODO)
-    - Loading the model and the agent 
-    - Start loading the game and streaming the results 
-
-    Args:
-        session_id (str): The session. 
-        Using this session id we can train any of the experiment 
-    """
-    rewards_response = utils.get_session_files(session_id)
-    streamer = RewardsStreamer(session_id = session_id, response = rewards_response)
-    return StreamingResponse(streamer.stream_episode())
-    
-     
-
-@app.get('/api/v1/stop_training/')
-def stop_training():
-    # NOTE: (TODO)
-    # Stop training does not work for now. 
-    # One main reason is to make it into a different threading. This might introduce
-    # more bugs and problems. One can stop training by just clicking the cross button. 
-    # Howevar it will automatically close once episode gets finished
-    
-    pygame.quit() 
-    return {
-        "status" : 200, 
-        "message" : "Stopped training successfully"
-    }
 
 
 @app.post("/api/v1/validate_exp")
@@ -289,7 +229,7 @@ def validate_latest_expriment():
 
 
 @app.post("/api/v1/push_model")
-def push_model(model_name : str):
+def push_model():
     # In the frontend we will show the list of available model agents and their infos like 
     # How much they were trained 
     # their total reward 
@@ -311,3 +251,129 @@ def get_all_envs():
 @app.post("/api/v1/get_all_tracks")
 def get_all_tracks():
     return utils.get_all_tracks("car-racer")
+
+def enableStreaming():
+    global stop_streaming
+    stop_streaming = False
+    
+def convert_str_func_to_exec(str_function: str, function_name: str):
+    globals_dict = {}
+    exec(str_function, globals_dict)
+    new_func = globals_dict[function_name]
+    return new_func
+
+def generate(session_id):
+    r = utils.get_session_files(session_id)
+    print(session_id)
+    print("check" ,session_id)
+    record = 0
+    done = False
+    enableStreaming()
+    
+    # environment parameters 
+    env_name = r["env_params"]["environment_name"]
+    env_world = int(r["env_params"]["environment_world"])
+    mode = r["env_params"]["mode"]
+    car_speed = r["env_params"]["car_speed"]
+    
+    # agent parameters
+    layer_config = eval(r["agent_params"]["model_configuration"])
+    if type(layer_config) == str:
+        layer_config = eval(layer_config)
+
+    lr = r["agent_params"]["learning_rate"]
+    loss = r["agent_params"]["loss_fn"]
+    optimizer = r["agent_params"]["optimizer"]
+    gamma = r["agent_params"]["gamma"]
+    epsilon = r["agent_params"]['epsilon']
+    num_episodes = r["agent_params"]["num_episodes"]
+    
+    reward_function = r["training_params"]["reward_function"]
+    
+    global lock
+        
+    checkpoint_folder_path = os.path.join(
+        utils.get_home_path(),
+        CONFIG["REWARDS_PARENT_CONFIG_DIR"], 
+        f"{session_id}/{CONFIG['REWARDS_CONFIG_MODEL_FOLDER_NAME']}/"
+    )
+    
+    model = LinearQNet(layer_config)
+
+    agent = QTrainer(
+        lr = lr, 
+        gamma = gamma, 
+        epsilon = epsilon, 
+        model = model, 
+        loss = loss, 
+        optimizer = optimizer, 
+        checkpoint_folder_path = checkpoint_folder_path, 
+        model_name = "model.pth"
+    )
+    
+    game = CarGame(
+        track_num=env_world, 
+        mode = mode, 
+        reward_function=convert_str_func_to_exec(
+            reward_function, 
+            function_name="reward_function"
+        ), 
+        display_type="surface", 
+        screen_size=(800, 700)
+    )        
+    game.FPS = car_speed
+    
+    record = 0
+    plot_scores = []
+    plot_mean_scores = []
+    total_score = 0
+    done = False
+    
+    while True:
+        global stop_streaming
+        if stop_streaming or agent.n_games == num_episodes:
+            return {"status": 204}
+        reward, done, score, pix = agent.train_step(game)
+        game.timeTicking()
+
+        if done:
+            game.initialize()
+            agent.n_games += 1
+            agent.train_long_memory()
+            if score > record:
+                record = score
+                agent.model.save(
+                    checkpoint_folder_path, 
+                    'model.pth', 
+                    device = "cpu"
+                )
+            print('Game', agent.n_games, 'Score', score, 'Record:', record)
+            plot_scores.append(score)
+            total_score += score
+            mean_score = total_score / agent.n_games
+            plot_mean_scores.append(mean_score)
+            utils.update_graphing_file(session_id, {"plot_scores": plot_scores, "plot_mean_scores": plot_mean_scores})
+        img = np.fliplr(pix)
+        img = np.rot90(img)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.imencode(".png", img)[1]
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(img) + b'\r\n')
+
+@app.route('/api/v1/stream', methods = ['GET'])
+def stream():
+    session_id = request.args.get('session_id')
+    print(session_id)
+    return Response(generate(session_id), mimetype = "multipart/x-mixed-replace; boundary=frame")
+
+@app.route('/api/v1/stop')
+def stop():
+    global stop_streaming
+    stop_streaming = True
+    return {"status": 204}
+    
+if __name__ == '__main__':
+   host = "127.0.0.1"
+   port = 8000
+   debug = True
+   options = None
+   app.run(host, port, debug, options)

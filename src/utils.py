@@ -1,17 +1,18 @@
-import os
-import json
-import shutil 
-from typing import Optional, Union, Any, Dict 
-
-# rewards package
+from typing import Optional, Union, Any, Dict
 from src.config import CONFIG
-from rewards import workflow, Agent
+import shutil 
+import json
+import os
 
 
 def get_home_path():
     # get the home directory using os
     return os.path.expanduser("~")
 
+def update_graphing_file(session_id: str, data: dict, dir: Optional[str] = None, name: Optional[str] = None) -> None:
+    f = open("D:/Prototypes/rewards.ai/training-platform\src/assets/temp.json", "w")
+    f.write(json.dumps(data))
+    
 
 def create_folder_struct(dir: Optional[str] = None, name: Optional[str] = None) -> None:
     """Creates a root folder to store all the session configuration

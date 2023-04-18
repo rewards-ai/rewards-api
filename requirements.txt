@@ -2,8 +2,8 @@ torch
 pandas 
 numpy 
 scikit-learn 
-fastapi==0.88.0
+Flask==2.2.3
+Flask-Cors==3.0.10
 rewards
-wandb 
 matplotlib 
 pygame 
