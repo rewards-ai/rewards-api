@@ -28,7 +28,7 @@ pip install flask flask_cors flasgger
 After this you can run the start the server by typing:
 
 ```bash
-PYTHONPATH=. python3 rewards_api/main.py
+python3 main.py
 ```
 
 ### **API endpoints requests and responses**
