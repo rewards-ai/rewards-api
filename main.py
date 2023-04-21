@@ -1,16 +1,13 @@
-from rewards import QTrainer, LinearQNet, CarGame
-from werkzeug.exceptions import HTTPException
-from flask import Flask, Response, request, Request
-from werkzeug.exceptions import NotFound
-import matplotlib.pyplot as plt
-from src.config import CONFIG
-from flask_cors import CORS
-import src.utils as utils
+import os 
+import json 
+from datetime import datetime
+from flask_cors import CORS 
 from flasgger import Swagger
-import numpy as np
-import json
-import cv2
-import os
+from flask import Flask, Response, request, Request
+
+from rewards_api import utils 
+from rewards_api.config import CONFIG 
+from rewards_api.streamer import RewardsStreamer
 
 app = Flask(__name__)
 CORS(app)
@@ -21,28 +18,23 @@ def startup_event():
     utils.create_folder_struct()
     app.logger.info("Folder Created")
     app.logger.info("Starting up")
-    
+
+
 @app.post('/api/v1/create_session')
 def create_new_session():
     """
-    Create a new session in the rewards-platform where user can now initialize with different environment, agent configuration.
-
-    ---
-    parameters:
-    - name: session_id
-        in: query
-        type: string
-        required: true
-        description: The session ID is a unique string. In each of the session, a unique type of model can be made (which will remain unchanged). However, during a session, some parameters including environment, agent, and some training can be changed.
-    """
+    Create a new session in the rewards-platform where user can now initialize 
+    with different environment, agent configuration
+    """ 
     session_id = request.args.get("session_id")
     utils.create_session(session_name=session_id)
+    
     return {
         'status' : 200, 
         'response' : f'Session {session_id} created successfully'
-    } 
+    }
 
-
+ 
 @app.post('/api/v1/delete_session')
 def delete_session():
     """
@@ -50,6 +42,7 @@ def delete_session():
     """
     session_id = request.args.get("session_id")
     return utils.delete_session(session_id = session_id)
+
 
 @app.post('/api/v1/write_env_params')
 def push_env_parameters():
@@ -82,7 +75,6 @@ def push_env_parameters():
         'response' : 'saved all the environment configurations successfully'
     } 
 
-
 @app.post("/api/v1/write_agent_params")
 def push_agent_parameters():
     """
@@ -113,6 +105,34 @@ def push_agent_parameters():
         num_episodes = body["num_episodes"]
     )
     
+    model_history_path = os.path.join(
+        utils.get_home_path(), 
+        CONFIG['REWARDS_PARENT_CONFIG_DIR'], 
+        body["session_id"], 
+        CONFIG["REWARDS_CONFIG_MODEL_FOLDER_NAME"],
+        CONFIG['MODEL_HISTORY_JSON_NAME']
+    )
+    
+    creation_init = datetime.now() 
+    creation_date, creation_time = creation_init.__str__().split(' ')
+    
+    model_history = json.load(open(model_history_path))
+    model_history['last_created'] = {
+        'date' : creation_date, 
+        'time' : creation_time, 
+        'loss' : body["loss_fn"],
+        'optimizer' : body["optimizer"], 
+        'gamma' : body["gamma"], 
+        'epsilon' : body["epsilon"],
+        'model_config' : body["model_configuration"],
+    }
+    
+    # TODO: Printing must be deprecated before all deployement 
+    print(json.dumps(model_history, indent=4))
+    
+    with open(model_history_path, "w") as model_history_json:
+        json.dump(model_history, model_history_json)
+            
     return {
         'status' : 200, 
         'response' : 'Agent configurations saved sucessfully',
@@ -128,20 +148,6 @@ def push_training_parameters():
     - learning_algorithm : example : 0.01 
     - enable_wandb : example : mse 
     - reward_function : example : Callable a reward function looks like this: 
-    
-    ```python
-    def reward_func(props):
-        reward = 0
-        if props["isAlive"]:
-            reward = 1
-        obs = props["obs"]
-        if obs[0] < obs[-1] and props["dir"] == -1:
-            reward += 1
-        elif obs[0] > obs[-1] and props["dir"] == 1:
-            reward += 1
-        else:
-            reward += 0
-        return reward
     ``` 
     
     ---
@@ -210,39 +216,6 @@ def get_all_sessions():
     """
     return utils.get_all_sessions_info()
 
-
-@app.post("/api/v1/validate_exp")
-def validate_latest_expriment():
-    # Steps:
-    # First it will check if training got stopped or not. If not it will stop the training 
-    # Then it will save the model 
-    # Load the model and run one episode in an validation environment 
-    # Then it will put a response status of 200 of returning status 
-    # {
-    #   status : 200,
-    #   reward : ... 
-    #}
-    return {
-        'status' : 200, 
-        'response' : 'ok'
-    }  
-
-
-@app.post("/api/v1/push_model")
-def push_model():
-    # In the frontend we will show the list of available model agents and their infos like 
-    # How much they were trained 
-    # their total reward 
-    # their average reward 
-    # other agent and env configs stored 
-    # user will select a model to push 
-    # that name of the model will be the parameter 
-    # then it will get pushed into S3 bucket 
-    return {
-        'status' : 200, 
-        'response' : 'ok'
-    }   
-    
 @app.post("/api/v1/get_all_envs")
 def get_all_envs():
     # Returns data of all the environments
@@ -252,125 +225,56 @@ def get_all_envs():
 def get_all_tracks():
     return utils.get_all_tracks("car-racer")
 
-def enableStreaming():
-    global stop_streaming
-    stop_streaming = False
-    
-def convert_str_func_to_exec(str_function: str, function_name: str):
-    globals_dict = {}
-    exec(str_function, globals_dict)
-    new_func = globals_dict[function_name]
-    return new_func
+# there will be multiple API requests 
+# for all the different types of the environments
+# such that it will do the evaluation for all the environments
+# and also we will track the total time spent 
+# and how many "done" are there 
 
-def generate(session_id):
-    r = utils.get_session_files(session_id)
-    print(session_id)
-    print("check" ,session_id)
-    record = 0
-    done = False
-    enableStreaming()
-    
-    # environment parameters 
-    env_name = r["env_params"]["environment_name"]
-    env_world = int(r["env_params"]["environment_world"])
-    mode = r["env_params"]["mode"]
-    car_speed = r["env_params"]["car_speed"]
-    
-    # agent parameters
-    layer_config = eval(r["agent_params"]["model_configuration"])
-    if type(layer_config) == str:
-        layer_config = eval(layer_config)
 
-    lr = r["agent_params"]["learning_rate"]
-    loss = r["agent_params"]["loss_fn"]
-    optimizer = r["agent_params"]["optimizer"]
-    gamma = r["agent_params"]["gamma"]
-    epsilon = r["agent_params"]['epsilon']
-    num_episodes = r["agent_params"]["num_episodes"]
-    
-    reward_function = r["training_params"]["reward_function"]
-    
-    global lock
-        
-    checkpoint_folder_path = os.path.join(
-        utils.get_home_path(),
-        CONFIG["REWARDS_PARENT_CONFIG_DIR"], 
-        f"{session_id}/{CONFIG['REWARDS_CONFIG_MODEL_FOLDER_NAME']}/"
-    )
-    
-    model = LinearQNet(layer_config)
-
-    agent = QTrainer(
-        lr = lr, 
-        gamma = gamma, 
-        epsilon = epsilon, 
-        model = model, 
-        loss = loss, 
-        optimizer = optimizer, 
-        checkpoint_folder_path = checkpoint_folder_path, 
-        model_name = "model.pth"
-    )
-    
-    game = CarGame(
-        track_num=env_world, 
-        mode = mode, 
-        reward_function=convert_str_func_to_exec(
-            reward_function, 
-            function_name="reward_function"
-        ), 
-        display_type="surface", 
-        screen_size=(800, 700)
-    )        
-    game.FPS = car_speed
-    
-    record = 0
-    plot_scores = []
-    plot_mean_scores = []
-    total_score = 0
-    done = False
-    
-    while True:
-        global stop_streaming
-        if stop_streaming or agent.n_games == num_episodes:
-            return {"status": 204}
-        reward, done, score, pix = agent.train_step(game)
-        game.timeTicking()
-
-        if done:
-            game.initialize()
-            agent.n_games += 1
-            agent.train_long_memory()
-            if score > record:
-                record = score
-                agent.model.save(
-                    checkpoint_folder_path, 
-                    'model.pth', 
-                    device = "cpu"
-                )
-            print('Game', agent.n_games, 'Score', score, 'Record:', record)
-            plot_scores.append(score)
-            total_score += score
-            mean_score = total_score / agent.n_games
-            plot_mean_scores.append(mean_score)
-            utils.update_graphing_file(session_id, {"plot_scores": plot_scores, "plot_mean_scores": plot_mean_scores})
-        img = np.fliplr(pix)
-        img = np.rot90(img)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.imencode(".png", img)[1]
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(img) + b'\r\n')
+# During evaluation the metrics must not be dependent on the score 
+# Number of dones 
 
 @app.route('/api/v1/stream', methods = ['GET'])
-def stream():
+def train_stream():
+    print("Streaming started")
     session_id = request.args.get('session_id')
-    print(session_id)
-    return Response(generate(session_id), mimetype = "multipart/x-mixed-replace; boundary=frame")
+    rewards_streamer = RewardsStreamer(
+        session_id=session_id
+    )
+    
+    return Response(
+        rewards_streamer.train(), 
+        mimetype = "multipart/x-mixed-replace; boundary=frame"
+    )
 
+
+@app.route('/api/v1/evaluate/', methods = ['POST'])
+def evaluate_stream():
+    body = request.json 
+    session_id = body['session_id']
+    mode = body['mode']
+    track_num = int(body['track_num']) 
+    rewards_streamer = RewardsStreamer(
+        session_id=session_id
+    )
+    
+    return Response(
+        rewards_streamer.evaluate(
+            mode = mode, 
+            track_num = track_num
+        ), 
+        mimetype = "multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+# Will be deprecated soon 
 @app.route('/api/v1/stop')
 def stop():
-    global stop_streaming
-    stop_streaming = True
+    # global stop_streaming 
+    # stop_streaming = True 
     return {"status": 204}
-    
+
 if __name__ == '__main__':
    host = "127.0.0.1"
    port = 8000
