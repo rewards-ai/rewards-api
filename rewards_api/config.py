@@ -19,6 +19,7 @@ class GlobalConfig:
     EVALUATION_TOTAL_TIME_FOR_TRAINING_PATH : int = 30
     EVALUATION_TOTAL_TIME_FOR_EVALUATION_PATH : int = 60
     
+    # TODO: Change this here 
     STREAMING_TEMP_JSON_PATH: str = "/home/anindya/workspace/RewardsHQ/RewardsSuit/training-platform/src/assets/temp.json"
 
 CONFIG = GlobalConfig().__dict__.copy() 
